@@ -29,36 +29,49 @@ public class LoanDecisionService {
 
         int creditModifier = segment.getCreditModifier();
 
-        double bestAmount = 0;
-        int bestPeriod = 0;
+
+        double requestedAmount = Math.max(MIN_AMOUNT, Math.min(request.getLoanAmount(), MAX_AMOUNT));
+        int requestedPeriod = Math.max(MIN_PERIOD, Math.min(request.getLoanPeriodMonths(), MAX_PERIOD));
+
+        double maxAmountForRequestedPeriod = creditModifier * requestedPeriod;
+        maxAmountForRequestedPeriod = Math.min(maxAmountForRequestedPeriod, MAX_AMOUNT);
+
+        if (maxAmountForRequestedPeriod >= MIN_AMOUNT) {
 
 
-        for (int period = MIN_PERIOD; period <= MAX_PERIOD; period++) {
+            if (requestedAmount <= maxAmountForRequestedPeriod) {
+                return buildResponse(true, maxAmountForRequestedPeriod, requestedPeriod);
+            }
 
+            int requiredPeriod = (int) Math.ceil(requestedAmount / (double) creditModifier);
 
-            double maxAmountForPeriod = creditModifier * period;
-
-
-            if (maxAmountForPeriod < MIN_AMOUNT) {
-                continue;
+            if (requiredPeriod >= MIN_PERIOD && requiredPeriod <= MAX_PERIOD) {
+                return buildResponse(true, requestedAmount, requiredPeriod);
             }
 
 
-            maxAmountForPeriod = Math.min(maxAmountForPeriod, MAX_AMOUNT);
-
-
-            if (maxAmountForPeriod > bestAmount) {
-                bestAmount = maxAmountForPeriod;
-                bestPeriod = period;
-            }
+            double approvedAmount = Math.min(requestedAmount, MAX_AMOUNT);
+            int approvedPeriod = (int) Math.ceil(approvedAmount / (double) creditModifier);
+            return buildResponse(true, approvedAmount, approvedPeriod);
         }
 
 
-        if (bestAmount == 0) {
-            return buildResponse(false, 0, 0);
+        int requiredPeriod = (int) Math.ceil(requestedAmount / (double) creditModifier);
+
+        if (requiredPeriod >= MIN_PERIOD && requiredPeriod <= MAX_PERIOD) {
+            return buildResponse(true, requestedAmount, requiredPeriod);
         }
 
-        return buildResponse(true, bestAmount, bestPeriod);
+
+        double maxAtMaxPeriod = creditModifier * MAX_PERIOD;
+        maxAtMaxPeriod = Math.min(maxAtMaxPeriod, MAX_AMOUNT);
+
+        if (maxAtMaxPeriod >= MIN_AMOUNT) {
+            return buildResponse(true, maxAtMaxPeriod, MAX_PERIOD);
+        }
+
+
+        return buildResponse(false, 0, 0);
     }
 
     private LoanResponse buildResponse(boolean approved, double amount, int period) {
