@@ -19,12 +19,23 @@ public class LoanDecisionService {
     private static final int MIN_PERIOD = 12;
     private static final int MAX_PERIOD = 60;
 
+    // Decision strategy:
+    // The task allows two interpretations:
+    // 1) Return maximum possible loan regardless of input
+    // 2) Start from requested values and adjust if needed
+    //
+    // This implementation follows 1, as the task states to find the maximum sum
+    // "regardless of the requested amount", so I compute the global maximum
+    // across all periods.
+    //
+    // Note: A real system could first evaluate the requested amount/period
+    // and only fall back to alternatives to better reflect user intent.
     public LoanResponse calculate(LoanRequest request) {
 
         Segment segment = userRepository.findSegmentByPersonalCode(request.getPersonalCode());
 
         // 1. Debt -> Reject
-        // Thought process: Always reject debt first, before any calculations. Avoids unnecessary calculations
+        // Thought process: Always reject debt first, before any calculations.
 
         if (segment == Segment.DEBT) {
             return buildResponse(false, 0, 0);
@@ -44,7 +55,7 @@ public class LoanDecisionService {
         //   rearrange it to max_loan_amount <= credit_modifier * loan_period.
         //   This allows to directly find the maximum possible loan for a given period, skipping unnecessary checks.
         // - Cap the result at MAX_AMOUNT and only consider amounts above MIN_AMOUNT.
-        // - By doing this, efficiently pick the period that gives the largest possible loan without extra calculations.
+        // - By doing this, pick the period that gives the largest possible loan without extra calculations.
         double bestAmount = 0;
         int bestPeriod = 0;
 
