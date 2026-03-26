@@ -1,4 +1,5 @@
 package com.feray.loan_decision_engine.model;
+
 import lombok.Getter;
 
 @Getter

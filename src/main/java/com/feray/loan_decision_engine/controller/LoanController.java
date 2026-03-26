@@ -6,6 +6,7 @@ import com.feray.loan_decision_engine.service.LoanDecisionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+@CrossOrigin(origins = "http://localhost:5173")
 @RestController
 @RequestMapping("/loan")
 @RequiredArgsConstructor
