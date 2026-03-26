@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class LoanDecisionService {
 
+    // Repository to fetch user segment information based on personal code
     private final MockUserRepository userRepository;
 
     private static final double MIN_AMOUNT = 2000;
@@ -22,6 +23,8 @@ public class LoanDecisionService {
 
         Segment segment = userRepository.findSegmentByPersonalCode(request.getPersonalCode());
 
+        // 1. Debt -> Reject
+        // Thought process: Always reject debt first, before any calculations. Avoids unnecessary calculations
 
         if (segment == Segment.DEBT) {
             return buildResponse(false, 0, 0);
@@ -29,49 +32,49 @@ public class LoanDecisionService {
 
         int creditModifier = segment.getCreditModifier();
 
-
+        // 2. Clamp inputs
+        // Thought process: Frontend handles this, but to be safe never let an amount be out of allowed scope
         double requestedAmount = Math.max(MIN_AMOUNT, Math.min(request.getLoanAmount(), MAX_AMOUNT));
         int requestedPeriod = Math.max(MIN_PERIOD, Math.min(request.getLoanPeriodMonths(), MAX_PERIOD));
 
-        double maxAmountForRequestedPeriod = creditModifier * requestedPeriod;
-        maxAmountForRequestedPeriod = Math.min(maxAmountForRequestedPeriod, MAX_AMOUNT);
+        // 3. Find best possible loan
+        // Thought process:
+        // - Loop over all allowed periods (12–60 months) to find maximum approvable loan
+        // - Instead of calculating the full credit score formula each time ((credit_modifier / loan_amount) * loan_period >= 1),
+        //   rearrange it to max_loan_amount <= credit_modifier * loan_period.
+        //   This allows to directly find the maximum possible loan for a given period, skipping unnecessary checks.
+        // - Cap the result at MAX_AMOUNT and only consider amounts above MIN_AMOUNT.
+        // - By doing this, efficiently pick the period that gives the largest possible loan without extra calculations.
+        double bestAmount = 0;
+        int bestPeriod = 0;
 
-        if (maxAmountForRequestedPeriod >= MIN_AMOUNT) {
+        for (int period = MIN_PERIOD; period <= MAX_PERIOD; period++) {
 
+            // Derived from formula: (credit_modifier / loan_amount) * loan_period >= 1
+            double maxAmountForPeriod = creditModifier * period;
 
-            if (requestedAmount <= maxAmountForRequestedPeriod) {
-                return buildResponse(true, maxAmountForRequestedPeriod, requestedPeriod);
+            maxAmountForPeriod = Math.min(maxAmountForPeriod, MAX_AMOUNT);
+
+            if (maxAmountForPeriod >= MIN_AMOUNT) {
+                if (maxAmountForPeriod > bestAmount) {
+                    bestAmount = maxAmountForPeriod;
+                    bestPeriod = period;
+                }
             }
-
-            int requiredPeriod = (int) Math.ceil(requestedAmount / (double) creditModifier);
-
-            if (requiredPeriod >= MIN_PERIOD && requiredPeriod <= MAX_PERIOD) {
-                return buildResponse(true, requestedAmount, requiredPeriod);
-            }
-
-
-            double approvedAmount = Math.min(requestedAmount, MAX_AMOUNT);
-            int approvedPeriod = (int) Math.ceil(approvedAmount / (double) creditModifier);
-            return buildResponse(true, approvedAmount, approvedPeriod);
         }
 
-
-        int requiredPeriod = (int) Math.ceil(requestedAmount / (double) creditModifier);
-
-        if (requiredPeriod >= MIN_PERIOD && requiredPeriod <= MAX_PERIOD) {
-            return buildResponse(true, requestedAmount, requiredPeriod);
+        // 4. If nothing valid → reject
+        if (bestAmount < MIN_AMOUNT) {
+            return buildResponse(false, 0, 0);
         }
 
-
-        double maxAtMaxPeriod = creditModifier * MAX_PERIOD;
-        maxAtMaxPeriod = Math.min(maxAtMaxPeriod, MAX_AMOUNT);
-
-        if (maxAtMaxPeriod >= MIN_AMOUNT) {
-            return buildResponse(true, maxAtMaxPeriod, MAX_PERIOD);
+        // 5. If requested amount is acceptable, return BEST
+        if (requestedAmount <= bestAmount) {
+            return buildResponse(true, bestAmount, bestPeriod);
         }
 
-
-        return buildResponse(false, 0, 0);
+        // 6. Otherwise return maximum possible
+        return buildResponse(true, bestAmount, bestPeriod);
     }
 
     private LoanResponse buildResponse(boolean approved, double amount, int period) {

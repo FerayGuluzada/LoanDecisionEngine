@@ -4,7 +4,7 @@ import lombok.Data;
 
 @Data
 public class LoanRequest {
-    private String personalCode;
+    private String personalCode; //String: may contain leading zeros
     private double loanAmount;
     private int loanPeriodMonths;
 
